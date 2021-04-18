@@ -1,8 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
+using System.IO.Compression;
+using Ionic.Zip;
 
 namespace Homework_06
 {
@@ -53,126 +52,237 @@ namespace Homework_06
 
             Что оценивается
 
-            Число N прочитано из файла. Если данного числа там нет, а также если оно выходит за рамки заданного диапазона или не может быть прочитано, пользователю выводится сообщение об ошибке.
+            Число N прочитано из файла. Если данного числа там нет, а также если оно выходит за рамки заданного диапазона или не может быть прочитано, 
+            пользователю выводится сообщение об ошибке.
             Группы чисел рассчитаны, при этом в каждой группе находятся только те числа, которые не делятся друг на друга.
             Пользователю предлагается выбрать: рассчитать все группы или только посмотреть их количество для заданного N.
             После расчётов группы чисел записываются в файл, по строке на группу.
-            Пользователю предлагается поместить файл с рассчитанными группами в архив. При его положительном ответе архив сформирован, а статистика по размеру обоих файлов выведена на экран.
+            Пользователю предлагается поместить файл с рассчитанными группами в архив. При его положительном ответе архив сформирован, 
+            а статистика по размеру обоих файлов выведена на экран.
             Расчёт групп для N = 1_000_000_000 не должен превышать 20 минут, какое бы оборудование ни использовалось.
                                     
             */
-            
-            PrintResult(DivisibilityProperty(10));
-            PrintResult(DivisibilityProperty(50));
 
-            var N = GetPositiveNumber();
-            PrintResult(DivisibilityProperty(N));
-
+            Console.WriteLine("Разработайте программу, которая будет разбивать числа от 1 до N на группы,\n"+ 
+                "при этом числа в каждой отдельно взятой группе не делятся друг на друга.\n"+ 
+                "Число N хранится в файле, поэтому его необходимо сначала оттуда прочитать.\n"+ 
+                "Это число может изменяться от единицы до одного миллиарда.");
+            var data = string.Empty;
+            if(!GetDataFromFile("number.txt", out data))
+            {
+                Console.ReadKey();
+                return;
+            }
+            var number = 0;
+            if (!ParseStringToInt(data, out number))
+            {
+                Console.ReadKey();
+                return;
+            }
+            if(!CheckNumberLimits(number, 1, 1_000_000_000))
+            {
+                Console.ReadKey();
+                return;
+            }
+            // расчет кол-ва взимно неделимых групп
+            var groupsCnt = GetGroupCount(number);
+            Console.WriteLine($"Для числа {number} кол-во групп взаимно неделимых чисел: {groupsCnt}");
+            if (CalcGroupsUserChoice())
+            {
+                var startDate = DateTime.Now;
+                var fileName = "result.txt";
+                SaveToFile(number, fileName);
+                var timeSpan = DateTime.Now.Subtract(startDate);
+                Console.WriteLine($"Расчет занял {timeSpan.TotalSeconds} секунд");
+                if (ArchivingUserChoise(fileName))
+                {
+                    Compress(fileName, "result.zip");
+                }
+                        
+            }
             Console.ReadKey();
         }
 
-
         /// <summary>
-        /// Контроль ввода пользователя. Требуем ввести целое положительное число.
+        /// Чтение данных из файла.
         /// </summary>
-        /// <returns></returns>
-        private static int GetPositiveNumber()
+        /// <returns />
+        private static bool GetDataFromFile(string fileName, out string data)
         {
-            string inputData = string.Empty;
-            int result = 0;
+            data = String.Empty;
+            if (!File.Exists(fileName))
+            {
+                Console.WriteLine($"Файл {fileName} не существует!");
+                return false;
+            }
+            data = File.ReadAllText(fileName);
+            return true;
+        }
+        
+        /// <summary>
+        /// Проверка, что строковые данные являются числом
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="number"></param>
+        /// <returns></returns>
+        private static bool ParseStringToInt(string data, out int number)
+        {
+            number = 0;
+            if (int.TryParse(data, out int num))
+            {
+                number = num;
+                return true;
+            }
+            else
+            {
+                Console.WriteLine($"Данные не возможно интерпретировать как число!");
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// Проверка числа на соответствие диапазону
+        /// </summary>
+        /// <param name="number"></param>
+        /// <returns></returns>
+        private static bool CheckNumberLimits(int number, int min, int max)
+        {
+            if (number >= min && number <= max)
+            {
+                return true;
+            }
+            Console.WriteLine($"Введенное число имеет не корректное значение: {number}");
+            return false;
+        }
+        
+        /// <summary>
+        /// Выбор пользователем алгоритма работы
+        /// </summary>
+        public static bool CalcGroupsUserChoice()
+        {
+            var result = false;
             do
             {
-                Console.Write("Введите целое положительное число: ");
-                inputData = Console.ReadLine();
-                if(int.TryParse(inputData, out result))
+                Console.Write("Рассчитать группы? (д/н): ");
+                var userChoice = Console.ReadLine().Trim().ToLower();
+                if (userChoice == "д")
                 {
-                    if (result > 0)
-                        break;
+                    result = true;
+                    break;
                 }
-                
-                Console.WriteLine("Некорректный ввод!");
+                else if(userChoice == "н")
+                {
+                    result = false;
+                    break;
+                }
+                else
+                {
+                    Console.WriteLine("Невозможно распознать ответ. Пожалуйста введите \"д\" или \"н\".");
+                }
+            } while (true);
+            
+            return result;
+        }
+        
+        /// <summary>
+        /// Выбор пользователем необходимости архивации файла
+        /// </summary>
+        /// <returns></returns>
+        private static bool ArchivingUserChoise(string fileName)
+        {
+            var result = false;
+            do
+            {
+                Console.Write($"Архивировать файл {fileName}? (д/н): ");
+                var userChoice = Console.ReadLine().Trim().ToLower();
+                if (userChoice == "д")
+                {
+                    result = true;
+                    break;
+                }
+                else if(userChoice == "н")
+                {
+                    result = false;
+                    break;
+                }
+                else
+                {
+                    Console.WriteLine("Невозможно распознать ответ. Пожалуйста введите \"д\" или \"н\".");
+                }
             } while (true);
 
             return result;
         }
-
+        
         /// <summary>
-        /// Распределения числа на несколько групп в соответствии со свойством делимости числа
+        /// Вычисление необходимого кол-ва групп для разложения числа на взаимно некратные числа 
         /// </summary>
-        /// <param name="n"></param>
-        /// <returns></returns>
-        private static int[] DivisibilityProperty(int n)
+        /// <param name="number">Исходное число</param>
+        /// <returns>Кол-во групп</returns>
+        public static int GetGroupCount(int number)
         {
-            int k = 0;
-            while(Math.Pow(2, k)<n)
+            return (int)Math.Ceiling(Math.Log(number, 2));
+        }
+        
+        /// <summary>
+        /// Сохранение в файл
+        /// </summary>
+        /// <param name="number"></param>
+        /// <param name="fileName"></param>
+        private static void SaveToFile(int number, string fileName)
+        {
+            var groupCnt = GetGroupCount(number);
+            using (StreamWriter sw = new StreamWriter(fileName, false))
             {
-                k++;   
-            }
-            int row = k;
-            int col = n;
-            int[,] groups = new int[row, col];
-            
-            groups[0, 0] = 1;
-            
-            for (int i=2; i<=n; i++)
-            {
-                for(int j=0; j<row; j++)
+                sw.WriteLine($"Результат для N = {number}");
+                for (int i = 1; i <= groupCnt; i++)
                 {
-                    for(int k=0;k<col;k++)
+                    sw.Write($"Группа {i}:");
+                    var startNum = GetStartOfGroup(i);
+                    var endNum = GetEndOfGroup(i);
+                    for (int j = startNum; j <= endNum; j++)
                     {
-                        if (groups[j, k] == 0)
-                            break;
+                        sw.Write($" {j}");
                     }
-                    if(groups)
-                    if(IsDivided(i, j))
+                    sw.WriteLine();
+                }
+            }    
+        }
+
+        private static int GetEndOfGroup(int groupNum)
+        {
+            var result = (int)Math.Pow(2, groupNum);
+            return result - 1;
+        }
+
+        private static int GetStartOfGroup(int groupNum)
+        {
+            var result = (int)Math.Pow(2, groupNum-1);
+            return result;
+        }
+        
+        /// <summary>
+        /// Архивация файла
+        /// </summary>
+        /// <param name="fileName"></param>
+        private static void Compress(string sourceFileName, string compressedFileName)
+        {
+            using (FileStream ss = new FileStream(sourceFileName, FileMode.OpenOrCreate))
+            {
+                using (FileStream ts = File.Create(compressedFileName))   // поток для записи сжатого файла
+                {
+                    // поток архивации
+                    using (GZipStream cs = new GZipStream(ts, CompressionMode.Compress))
                     {
-                        groups[i - 1] = groups[j - 1];
-                        break;
+                        ss.CopyTo(cs); // копируем байты из одного потока в другой
+                        Console.WriteLine("Сжатие файла {0} завершено. Было: {1}  стало: {2}.",
+                            sourceFileName,
+                            ss.Length,
+                            ts.Length);
                     }
                 }
-                if (groups[i - 1] == 0)
-                    groups[i - 1] = ++groupCnt;
             }
-            return groups;
         }
 
-        /// <summary>
-        /// Проверка, что число A не делится на B
-        /// </summary>
-        /// <param name="a"></param>
-        /// <param name="b"></param>
-        /// <returns></returns>
-        private static bool IsNotDivided(int a, int b)
-        {
-            return (a % b)>0;
-        }
-
-        /// <summary>
-        /// Проверка, что число A кратно числу B
-        /// </summary>
-        /// <param name="a"></param>
-        /// <param name="b"></param>
-        /// <returns></returns>
-        private static bool IsDivided(int a, int b)
-        {
-            return (a % b) == 0;
-        }
-
-
-        private static void PrintResult(int[] groups)
-        {
-            Console.WriteLine($"Результат для N = {groups.Length}");
-            for(int i=0; i<groups.Max(); i++)
-            {
-                Console.Write($"{i+1}: ");
-                for(int j=0; j<groups.Length; j++)
-                {
-                    if(groups[j] == i+1)
-                    Console.Write($"{j+1, 4}");
-                }
-                Console.WriteLine();
-            }
-            Console.WriteLine();
-        }
     }
 }
